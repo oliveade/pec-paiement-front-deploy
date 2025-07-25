@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import axios from 'axios'
 import RefundModal from '@/components/RefundModalView.vue'
 import {
@@ -8,7 +8,9 @@ import {
   CreditCardIcon,
   CurrencyEuroIcon,
   ClockIcon,
-  ArrowUturnLeftIcon
+  ArrowUturnLeftIcon,
+  WifiIcon,
+  SignalSlashIcon
 } from '@heroicons/vue/24/solid'
 
 import { Bar } from 'vue-chartjs'
@@ -34,6 +36,58 @@ const error = ref('')
 const token = localStorage.getItem('token')
 const apiUrl = import.meta.env.VITE_API_URL
 
+const sseStats = ref(null)
+const sseConnected = ref(false)
+const eventSource = ref(null)
+const reconnectAttempts = ref(0)
+const maxReconnectAttempts = 5
+
+const connectSSE = () => {
+  if (eventSource.value) {
+    eventSource.value.close()
+  }
+
+  const sseUrl = `${apiUrl}/merchants/dashboard-stream`
+  eventSource.value = new EventSource(sseUrl, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  })
+
+  eventSource.value.onopen = () => {
+    console.log('SSE Marchand connecté')
+    sseConnected.value = true
+    reconnectAttempts.value = 0
+  }
+
+  eventSource.value.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data)
+      console.log('Données SSE reçues:', data)
+      sseStats.value = data
+    } catch (err) {
+      console.error('Erreur parsing SSE:', err)
+    }
+  }
+
+  eventSource.value.onerror = (error) => {
+    console.error('Erreur SSE:', error)
+    sseConnected.value = false
+
+    if (reconnectAttempts.value < maxReconnectAttempts) {
+      reconnectAttempts.value++
+      console.log(`Tentative de reconnexion ${reconnectAttempts.value}/${maxReconnectAttempts}`)
+      setTimeout(() => {
+        connectSSE()
+      }, 2000 * reconnectAttempts.value)
+    }
+  }
+}
+
+const currentStats = computed(() => {
+  return sseStats.value || chartStats.value
+})
+
 const fetchChartStats = async () => {
   try {
     const response = await axios.get(`${apiUrl}/merchants/dashboard-stats`, {
@@ -48,18 +102,25 @@ const fetchChartStats = async () => {
 onMounted(() => {
   fetchMerchant()
   fetchChartStats()
+  connectSSE()
+})
+
+onUnmounted(() => {
+  if (eventSource.value) {
+    eventSource.value.close()
+  }
 })
 
 const barData = computed(() => {
-  if (!chartStats.value) return null
+  if (!currentStats.value) return null
   return {
     labels: ['Succès', 'Échecs'],
     datasets: [
       {
         label: 'Montant (€)',
         data: [
-          chartStats.value.totalAmountSuccess,
-          chartStats.value.totalAmountFailed
+          currentStats.value.totalAmountSuccess || 0,
+          currentStats.value.totalAmountFailed || 0
         ],
         backgroundColor: ['#10B981', '#EF4444']
       }
@@ -68,20 +129,18 @@ const barData = computed(() => {
 })
 
 const dailyData = computed(() => {
-  if (!chartStats.value) return null
+  if (!currentStats.value || !currentStats.value.transactionsPerDay) return null
   return {
-    labels: chartStats.value.transactionsPerDay.map(t => t.date),
+    labels: currentStats.value.transactionsPerDay.map(t => t.date),
     datasets: [
       {
         label: 'Transactions / jour',
-        data: chartStats.value.transactionsPerDay.map(t => t.count),
+        data: currentStats.value.transactionsPerDay.map(t => t.count),
         backgroundColor: '#3B82F6'
       }
     ]
   }
 })
-
-
 
 const fetchMerchant = async () => {
   try {
@@ -135,16 +194,80 @@ const onRefundSuccess = () => {
   fetchTransactions()
   showRefundModal.value = false
 }
-
-onMounted(fetchMerchant)
 </script>
 
 <template>
   <div class="min-h-screen bg-gray-50 py-10 px-4">
     <div class="max-w-6xl mx-auto bg-white shadow-lg rounded-lg p-8">
-      <h1 class="text-3xl font-bold text-amber-600 mb-8 text-center flex items-center gap-2 justify-center">
-        <CreditCardIcon class="w-7 h-7" /> Tabelau de bord Marchand
-      </h1>
+      <div class="flex justify-between items-center mb-6">
+        <h1 class="text-3xl font-bold text-amber-600 flex items-center gap-2">
+          <CreditCardIcon class="w-7 h-7" /> Tableau de bord Marchand
+        </h1>
+
+        <div class="flex items-center gap-2 text-sm">
+          <div :class="{
+            'text-green-600': sseConnected,
+            'text-red-600': !sseConnected
+          }" class="flex items-center gap-1">
+            <WifiIcon v-if="sseConnected" class="w-4 h-4" />
+            <SignalSlashIcon v-else class="w-4 h-4" />
+            {{ sseConnected ? 'Temps réel' : 'Hors ligne' }}
+          </div>
+        </div>
+      </div>
+
+      <div v-if="currentStats" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div class="bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg p-4 shadow">
+          <div class="flex justify-between items-start">
+            <div>
+              <p class="text-blue-100 text-sm">Total Transactions</p>
+              <p class="text-2xl font-bold">{{ currentStats.totalTransactions || 0 }}</p>
+            </div>
+            <span v-if="sseStats" class="bg-red-500 text-white text-xs px-2 py-1 rounded-full animate-pulse">
+              LIVE
+            </span>
+          </div>
+        </div>
+
+        <div class="bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg p-4 shadow">
+          <div class="flex justify-between items-start">
+            <div>
+              <p class="text-green-100 text-sm">Transactions Réussies</p>
+              <p class="text-2xl font-bold">{{ currentStats.successfulTransactions || 0 }}</p>
+            </div>
+            <span v-if="sseStats" class="bg-red-500 text-white text-xs px-2 py-1 rounded-full animate-pulse">
+              LIVE
+            </span>
+          </div>
+        </div>
+
+        <div class="bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-lg p-4 shadow">
+          <div class="flex justify-between items-start">
+            <div>
+              <p class="text-amber-100 text-sm">Chiffre d'Affaires (€)</p>
+              <p class="text-2xl font-bold">{{ (currentStats.totalAmountSuccess || 0).toFixed(2) }}</p>
+            </div>
+            <span v-if="sseStats" class="bg-red-500 text-white text-xs px-2 py-1 rounded-full animate-pulse">
+              LIVE
+            </span>
+          </div>
+        </div>
+
+        <div class="bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-lg p-4 shadow">
+          <div class="flex justify-between items-start">
+            <div>
+              <p class="text-purple-100 text-sm">Taux de Réussite</p>
+              <p class="text-2xl font-bold">
+                {{ currentStats.totalTransactions ?
+                Math.round((currentStats.successfulTransactions / currentStats.totalTransactions) * 100) : 0 }}%
+              </p>
+            </div>
+            <span v-if="sseStats" class="bg-red-500 text-white text-xs px-2 py-1 rounded-full animate-pulse">
+              LIVE
+            </span>
+          </div>
+        </div>
+      </div>
 
       <div v-if="merchant" class="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
         <div class="bg-gray-100 rounded p-4 border">
@@ -167,7 +290,7 @@ onMounted(fetchMerchant)
 
       <div class="flex flex-col sm:flex-row justify-between gap-4 mb-8">
         <button @click="regenerateCredentials"
-          class="bg-amber-600 hover:bg-amber-700 text-white px-6 py-2 rounded shadow flex items-center gap-2">
+                class="bg-amber-600 hover:bg-amber-700 text-white px-6 py-2 rounded shadow flex items-center gap-2">
           <KeyIcon class="w-5 h-5" /> Régénérer APP_SECRET
         </button>
       </div>
@@ -183,11 +306,21 @@ onMounted(fetchMerchant)
 
       <div class="grid md:grid-cols-2 gap-6 mb-12">
         <div class="bg-white p-4 border rounded shadow">
-          <h2 class="font-semibold text-gray-700 mb-4">Montants des transactions</h2>
+          <div class="flex justify-between items-center mb-4">
+            <h2 class="font-semibold text-gray-700">Montants des transactions</h2>
+            <span v-if="sseStats" class="bg-green-500 text-white text-xs px-2 py-1 rounded-full">
+              TEMPS RÉEL
+            </span>
+          </div>
           <Bar v-if="barData" :data="barData" />
         </div>
         <div class="bg-white p-4 border rounded shadow">
-          <h2 class="font-semibold text-gray-700 mb-4">Transactions par jour</h2>
+          <div class="flex justify-between items-center mb-4">
+            <h2 class="font-semibold text-gray-700">Transactions par jour</h2>
+            <span v-if="sseStats" class="bg-green-500 text-white text-xs px-2 py-1 rounded-full">
+              TEMPS RÉEL
+            </span>
+          </div>
           <Bar v-if="dailyData" :data="dailyData" />
         </div>
       </div>
@@ -196,22 +329,22 @@ onMounted(fetchMerchant)
         <h2 class="text-xl font-semibold text-gray-800 mb-4">Transactions</h2>
         <table class="min-w-full bg-white border text-sm">
           <thead>
-            <tr class="bg-amber-100 text-gray-800">
-              <th class="text-left px-4 py-2 border">#ID</th>
-              <th class="text-left px-4 py-2 border">Montant</th>
-              <th class="text-left px-4 py-2 border">Devise</th>
-              <th class="text-left px-4 py-2 border">Statut</th>
-              <th class="text-left px-4 py-2 border">URL Paiement</th>
-              <th class="text-left px-4 py-2 border">Opérations</th>
-              <th class="text-left px-4 py-2 border">Actions</th>
-            </tr>
+          <tr class="bg-amber-100 text-gray-800">
+            <th class="text-left px-4 py-2 border">#ID</th>
+            <th class="text-left px-4 py-2 border">Montant</th>
+            <th class="text-left px-4 py-2 border">Devise</th>
+            <th class="text-left px-4 py-2 border">Statut</th>
+            <th class="text-left px-4 py-2 border">URL Paiement</th>
+            <th class="text-left px-4 py-2 border">Opérations</th>
+            <th class="text-left px-4 py-2 border">Actions</th>
+          </tr>
           </thead>
           <tbody>
-            <tr v-for="tx in transactions" :key="tx.id" class="hover:bg-gray-50">
-              <td class="px-4 py-2 border">{{ tx.id }}</td>
-              <td class="px-4 py-2 border">{{ tx.amount }}</td>
-              <td class="px-4 py-2 border">{{ tx.currency }}</td>
-              <td class="px-4 py-2 border">
+          <tr v-for="tx in transactions" :key="tx.id" class="hover:bg-gray-50">
+            <td class="px-4 py-2 border">{{ tx.id }}</td>
+            <td class="px-4 py-2 border">{{ tx.amount }}</td>
+            <td class="px-4 py-2 border">{{ tx.currency }}</td>
+            <td class="px-4 py-2 border">
                 <span :class="{
                   'text-green-600': tx.status === 'success',
                   'text-red-600': tx.status === 'failed',
@@ -219,32 +352,32 @@ onMounted(fetchMerchant)
                 }">
                   {{ tx.status }}
                 </span>
-              </td>
-              <td class="px-4 py-2 border">
-                <a :href="tx.paymentUrl" target="_blank" class="text-amber-600 underline">Lien</a>
-              </td>
-              <td class="px-4 py-2 border">
-                <ul>
-                  <li v-for="op in tx.Operations" :key="op.id" class="flex items-center gap-2">
-                    <ClockIcon class="w-4 h-4 text-gray-400" />
-                    <span class="text-gray-700">{{ op.type }} – {{ op.status }} – {{ op.amount }}</span>
-                  </li>
-                </ul>
-              </td>
-              <td class="px-4 py-2 border">
-                <button v-if="tx.status === 'success'" @click="openRefundModal(tx)"
-                  class="text-white bg-amber-600 hover:bg-amber-700 px-3 py-1 rounded flex items-center gap-1">
-                  <ArrowUturnLeftIcon class="w-4 h-4" /> Rembourser
-                </button>
-              </td>
-            </tr>
+            </td>
+            <td class="px-4 py-2 border">
+              <a :href="tx.paymentUrl" target="_blank" class="text-amber-600 underline">Lien</a>
+            </td>
+            <td class="px-4 py-2 border">
+              <ul>
+                <li v-for="op in tx.Operations" :key="op.id" class="flex items-center gap-2">
+                  <ClockIcon class="w-4 h-4 text-gray-400" />
+                  <span class="text-gray-700">{{ op.type }} – {{ op.status }} – {{ op.amount }}</span>
+                </li>
+              </ul>
+            </td>
+            <td class="px-4 py-2 border">
+              <button v-if="tx.status === 'success'" @click="openRefundModal(tx)"
+                      class="text-white bg-amber-600 hover:bg-amber-700 px-3 py-1 rounded flex items-center gap-1">
+                <ArrowUturnLeftIcon class="w-4 h-4" /> Rembourser
+              </button>
+            </td>
+          </tr>
           </tbody>
         </table>
       </div>
     </div>
 
     <RefundModal :visible="showRefundModal" :transactionId="selectedTransaction?.id" @close="showRefundModal = false"
-      @refunded="onRefundSuccess" />
+                 @refunded="onRefundSuccess" />
 
   </div>
 </template>
