@@ -14,6 +14,7 @@ import CheckoutView from '@/views/CheckoutView.vue'
 import PayementProcessView from '@/views/PayementProcessView.vue'
 import PaymentSuccessView from '@/views/PaymentSuccessView.vue'
 import PaymentCancelView from '@/views/PaymentCancelView.vue'
+import SiteCredentialsView from '@/views/SiteCredentialsView.vue'
 const routes = [
   { path: '/', redirect: '/product' },
   { path: '/login', component: LoginView },
@@ -49,6 +50,10 @@ const routes = [
   {
     path: '/payment-processing',
     component: PayementProcessView,
+  },
+   {
+    path: '/configuration',
+    component: SiteCredentialsView,
   },
   { path: '/admin/login', component: AdminLogin },
   { path: '/payment-success', component: PaymentSuccessView },

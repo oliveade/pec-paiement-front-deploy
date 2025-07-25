@@ -1,35 +1,23 @@
-<template>
-<SiteTestNavbarView/>
-  <div class="max-w-6xl mx-auto px-4 py-10">
-    <h1 class="text-3xl font-bold text-gray-800 mb-8 text-center">Nos Produits</h1>
-
-    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
-      <div
-        v-for="product in products"
-        :key="product.id"
-        class="bg-white shadow rounded-lg p-4 flex flex-col"
-      >
-        <img
-          :src="product.image"
-          :alt="product.name"
-          class="w-full h-40 object-cover rounded mb-4"
-        />
-        <h2 class="text-lg font-semibold text-gray-800 mb-2">{{ product.name }}</h2>
-        <p class="text-amber-600 font-bold mb-4">{{ product.price }} €</p>
-        <button
-          @click="addToCart(product)"
-          class="mt-auto bg-amber-600 hover:bg-amber-700 text-white py-2 px-4 rounded"
-        >
-          Ajouter au panier
-        </button>
-      </div>
-    </div>
-  </div>
-</template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import SiteTestNavbarView from '@/components/SiteTestNavbarView.vue'
+
+const router = useRouter()
+const error = ref('')
+
+onMounted(() => {
+  const appId = sessionStorage.getItem('test_app_id')
+  const appSecret = sessionStorage.getItem('test_app_secret')
+
+  if (!appId || !appSecret) {
+    error.value = "Veuillez d’abord configurer vos credentials."
+    setTimeout(() => {
+      router.push('/configuration')
+    }, 1500)
+  }
+})
 const products = ref([
   {
     id: 1,
@@ -77,3 +65,32 @@ const addToCart = (product) => {
   alert(`${product.name} ajouté au panier !`)
 }
 </script>
+
+<template>
+<SiteTestNavbarView/>
+  <div class="max-w-6xl mx-auto px-4 py-10">
+    <h1 class="text-3xl font-bold text-gray-800 mb-8 text-center">Nos Produits</h1>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
+      <div
+        v-for="product in products"
+        :key="product.id"
+        class="bg-white shadow rounded-lg p-4 flex flex-col"
+      >
+        <img
+          :src="product.image"
+          :alt="product.name"
+          class="w-full h-40 object-cover rounded mb-4"
+        />
+        <h2 class="text-lg font-semibold text-gray-800 mb-2">{{ product.name }}</h2>
+        <p class="text-amber-600 font-bold mb-4">{{ product.price }} €</p>
+        <button
+          @click="addToCart(product)"
+          class="mt-auto bg-amber-600 hover:bg-amber-700 text-white py-2 px-4 rounded"
+        >
+          Ajouter au panier
+        </button>
+      </div>
+    </div>
+  </div>
+</template>
