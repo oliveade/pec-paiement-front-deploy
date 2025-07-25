@@ -11,7 +11,7 @@
         Connexion Marchand
       </router-link>
       <router-link to="/configuration" class="text-xl text-gray-700 hover:text-amber-600">
-        Identifiantq
+        Identifiants
       </router-link>
     </div>
     <div class="flex items-center space-x-4">
