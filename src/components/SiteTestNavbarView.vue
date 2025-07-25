@@ -10,6 +10,9 @@
       <router-link to="/login" class="text-xl text-gray-700 hover:text-amber-600">
         Connexion Marchand
       </router-link>
+      <router-link to="/configuration" class="text-xl text-gray-700 hover:text-amber-600">
+        Identifiantq
+      </router-link>
     </div>
     <div class="flex items-center space-x-4">
       <router-link to="/cart" class="relative">
