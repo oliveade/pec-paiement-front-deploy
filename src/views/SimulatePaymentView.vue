@@ -98,10 +98,8 @@ const total = computed(() =>
 const createTransaction = async () => {
   loading.value = true
   error.value = ''
-  const appId = sessionStorage.getItem('test_app_id')
-  const appSecret = sessionStorage.getItem('test_app_secret')
-  // const appId = import.meta.env.VITE_MERCHANT_APP_ID
-  // const appSecret = import.meta.env.VITE_MERCHANT_APP_SECRET
+  const appId = import.meta.env.VITE_MERCHANT_APP_ID
+  const appSecret = import.meta.env.VITE_MERCHANT_APP_SECRET
   try {
     const { data } = await axios.post(`${apiUrl}/transactions`, {
       amount: total.value,

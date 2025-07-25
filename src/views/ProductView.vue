@@ -1,23 +1,23 @@
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref} from 'vue'
 import { useRouter } from 'vue-router'
 import SiteTestNavbarView from '@/components/SiteTestNavbarView.vue'
 
 const router = useRouter()
 const error = ref('')
 
-onMounted(() => {
-  const appId = sessionStorage.getItem('test_app_id')
-  const appSecret = sessionStorage.getItem('test_app_secret')
+// onMounted(() => {
+//   const appId = sessionStorage.getItem('test_app_id')
+//   const appSecret = sessionStorage.getItem('test_app_secret')
 
-  if (!appId || !appSecret) {
-    error.value = "Veuillez d’abord configurer vos credentials."
-    setTimeout(() => {
-      router.push('/configuration')
-    }, 1500)
-  }
-})
+//   if (!appId || !appSecret) {
+//     error.value = "Veuillez d’abord configurer vos credentials."
+//     setTimeout(() => {
+//       router.push('/configuration')
+//     }, 1500)
+//   }
+// })
 const products = ref([
   {
     id: 1,
